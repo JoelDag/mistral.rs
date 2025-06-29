@@ -172,15 +172,42 @@ pub fn get_xlora_paths(
                         .get(name)
                         .unwrap_or_else(|| panic!("Adapter {name} not found."));
                     for path in paths {
-                        if path.extension().unwrap() == "safetensors" {
-                            adapters_safetensors.push((name.clone(), path.to_owned()));
+                        if path.is_dir() {
+                            println!("Found adapter directory: {:?}", path);
+                            for entry in fs::read_dir(path)? {
+                                let entry = entry?;
+                                let file_path = entry.path();
+                                println!("inspect file: {:?}", file_path);
+                                if let Some(ext) = file_path.extension().and_then(|e| e.to_str()) {
+                                    if ext == "safetensors" {
+                                        adapters_safetensors.push((name.clone(), file_path.clone()));
+                                    } else {
+                                        let conf = fs::read_to_string(&file_path)?;
+                                        let lora_config: LoraConfig = serde_json::from_str(&conf)?;
+                                        adapters_configs
+                                            .push((((i + 1).to_string(), name.clone()), lora_config));
+                                    }
+                                } else {
+                                    println!("skipping file with no extension: {:?}", file_path);
+                                }
+                            }
                         } else {
-                            let conf = fs::read_to_string(path)?;
-                            let lora_config: LoraConfig = serde_json::from_str(&conf)?;
-                            adapters_configs
-                                .push((((i + 1).to_string(), name.clone()), lora_config));
+                            println!("file path: {:?}", path);
+                            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                                if ext == "safetensors" {
+                                    adapters_safetensors.push((name.clone(), path.to_owned()));
+                                } else {
+                                    let conf = fs::read_to_string(path)?;
+                                    let lora_config: LoraConfig = serde_json::from_str(&conf)?;
+                                    adapters_configs
+                                        .push((((i + 1).to_string(), name.clone()), lora_config));
+                                }
+                            } else {
+                                println!("Skipping non-directory file with no extension: {:?}", path);
+                            }
                         }
                     }
+
                 }
             }
 
